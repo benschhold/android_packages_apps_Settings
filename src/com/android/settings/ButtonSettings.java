@@ -167,11 +167,7 @@ public class ButtonSettings extends SettingsPreferenceFragment implements
         mEnableHwKeys.setChecked(enableHwKeys);
         mEnableHwKeys.setOnPreferenceChangeListener(this);
         // Check if this feature is enable through device config
-        if(!getResources().getBoolean(com.android.internal.R.bool.config_hwKeysPref)) {
-            PreferenceCategory hwKeysPref = (PreferenceCategory)
-                    getPreferenceScreen().findPreference(CATEGORY_HW_KEYS);
-            getPreferenceScreen().removePreference(hwKeysPref);
-		}
+     
 
         HashMap<String, String> prefsToRemove = (HashMap<String, String>)
                 getPreferencesToRemove(this, getActivity());
