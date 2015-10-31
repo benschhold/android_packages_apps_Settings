@@ -166,7 +166,10 @@ public class BlissDisplaySettings extends SettingsPreferenceFragment implements
     public void writeLcdDensityPreference(int value) {
         // Set the value clicked on the list
         try {
-            SystemProperties.set("persist.sys.lcd_density", Integer.toString(value));
+       Helpers.getMount("rw");
+        new CMDProcessor().su.runWaitFor("busybox sed -i 's|ro.sf.lcd_density=.*|"
+                + "ro.sf.lcd_density" + "=" + Integer.toString(value) + "|' " + "/system/build.prop");
+        Helpers.getMount("ro");
         }
         catch (Exception e) {
             Log.w(TAG, "Unable to save LCD density");
@@ -214,7 +217,10 @@ public class BlissDisplaySettings extends SettingsPreferenceFragment implements
                             } else if (mDPI > 1000) {
                                 mDPI = 1000;
                             }
-                            SystemProperties.set("persist.sys.lcd_density", Integer.toString(mDPI));
+                               Helpers.getMount("rw");
+        new CMDProcessor().su.runWaitFor("busybox sed -i 's|ro.sf.lcd_density=.*|"
+                + "ro.sf.lcd_density" + "=" + Integer.toString(mDPI) + "|' " + "/system/build.prop");
+        Helpers.getMount("ro");
                             // Show a dialog before restart
                             // and let the user know of it
                             showDialogInner(DIALOG_DENSITY_WARNING);
@@ -277,7 +283,7 @@ public class BlissDisplaySettings extends SettingsPreferenceFragment implements
                         new DialogInterface.OnClickListener() {
                         public void onClick(DialogInterface dialog, int which) {
                             // If resatrt is the choosen one do it and apply the value
-                            systemRestart();
+                          new CMDProcessor().su.runWaitFor("reboot");
                         }
                     })
                     .create();
