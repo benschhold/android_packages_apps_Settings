@@ -25,6 +25,7 @@ import android.app.AlertDialog;
 import android.content.ContentResolver;
 import android.content.Context;
 import android.content.DialogInterface;
+import android.content.pm.PackageManager;
 import android.content.res.Resources;
 import android.database.ContentObserver;
 import android.os.Build;
@@ -40,6 +41,7 @@ import android.preference.SwitchPreference;
 import android.provider.SearchIndexableResource;
 import android.provider.Settings;
 import android.text.TextUtils;
+import android.util.Log;
 import android.widget.Button;
 import android.util.MathUtils;
 
@@ -58,24 +60,23 @@ public class AmbientSettings extends SettingsPreferenceFragment implements
     private static final String TAG = "AmbientSettings";
 
     private static final String KEY_DOZE = "doze";
-    private static final String KEY_DOZE_OVERWRITE_VALUE = "doze_overwrite_value";
-    private static final String KEY_DOZE_PULSE_IN = "doze_pulse_in";
     private static final String KEY_DOZE_PULSE_VISIBLE = "doze_pulse_visible";
-    private static final String KEY_DOZE_PULSE_OUT = "doze_pulse_out";
     private static final String KEY_DOZE_LIST_MODE = "doze_list_mode";
     private static final String KEY_DOZE_PULSE_MODE = "doze_pulse_on_notifications";
     private static final String KEY_DOZE_SHAKE_CATEGORY = "doze_shake_category";
     private static final String KEY_DOZE_SHAKE_THRESHOLD = "doze_shake_threshold";
     private static final String KEY_DOZE_TIME_MODE = "doze_time_mode";
     private static final String KEY_DOZE_BRIGHTNESS = "doze_brightness";
+    private static final String KEY_DOZE_SCHEDULE = "doze_schedule";
+
+    private static final String SYSTEMUI_METADATA_NAME = "com.android.systemui";
 
     private int mAccValue;
     private int mOldAccValue;
     private SwitchPreference mDozePreference;
+    private SwitchPreference mDozeSchedule;
     private ListPreference mDozeListMode;
-    private ListPreference mDozePulseIn;
     private ListPreference mDozePulseVisible;
-    private ListPreference mDozePulseOut;
     private ListPreference mDozeShakeThreshold;
     private SystemSettingSwitchPreference mDozeTimeMode;
     private SeekBarPreference mDozeBrightness;
@@ -96,14 +97,8 @@ public class AmbientSettings extends SettingsPreferenceFragment implements
         mDozePreference = (SwitchPreference) findPreference(KEY_DOZE);
         mDozePreference.setOnPreferenceChangeListener(this);
 
-        mDozePulseIn = (ListPreference) findPreference(KEY_DOZE_PULSE_IN);
-        mDozePulseIn.setOnPreferenceChangeListener(this);
-
         mDozePulseVisible = (ListPreference) findPreference(KEY_DOZE_PULSE_VISIBLE);
         mDozePulseVisible.setOnPreferenceChangeListener(this);
-
-        mDozePulseOut = (ListPreference) findPreference(KEY_DOZE_PULSE_OUT);
-        mDozePulseOut.setOnPreferenceChangeListener(this);
 
         if (isAccelerometerAvailable(activity)) {
             mDozeListMode = (ListPreference) findPreference(KEY_DOZE_LIST_MODE);
@@ -121,6 +116,11 @@ public class AmbientSettings extends SettingsPreferenceFragment implements
             removePreference(KEY_DOZE_SHAKE_THRESHOLD);
             removePreference(KEY_DOZE_SHAKE_CATEGORY);
         }
+
+        // Doze schedule
+        mDozeSchedule = (SwitchPreference) findPreference(KEY_DOZE_SCHEDULE);
+        mDozeSchedule.setOnPreferenceChangeListener(this);
+
         updateDozeListMode();
         updateDozeOptions();
         mShakeSensorManager = new ShakeSensorManager(activity, this);
@@ -276,10 +276,8 @@ public class AmbientSettings extends SettingsPreferenceFragment implements
     }
 
     private void enableShakeThreshold(boolean enabled) {
-        final boolean writeMode = Settings.System.getInt(getContentResolver(),
-                   Settings.System.DOZE_OVERWRITE_VALUE, 0) != 0;
         if (mDozeShakeThreshold != null) {
-            mDozeShakeThreshold.setEnabled(enabled && writeMode);
+            mDozeShakeThreshold.setEnabled(enabled);
         }
     }
 
@@ -342,31 +340,15 @@ public class AmbientSettings extends SettingsPreferenceFragment implements
     }
 
     private void updateDozeOptions() {
-        if (mDozePulseIn != null) {
-            final int statusDozePulseIn = Settings.System.getInt(getContentResolver(),
-                    Settings.System.DOZE_PULSE_DURATION_IN, 1000);
-            mDozePulseIn.setValue(String.valueOf(statusDozePulseIn));
-            int index = mDozePulseIn.findIndexOfValue(String.valueOf(statusDozePulseIn));
-            if (index != -1) {
-                mDozePulseIn.setSummary(mDozePulseIn.getEntries()[index]);
-            }
-        }
+        final Activity activity = getActivity();
+
         if (mDozePulseVisible != null) {
             final int statusDozePulseVisible = Settings.System.getInt(getContentResolver(),
-                    Settings.System.DOZE_PULSE_DURATION_VISIBLE, 3000);
+                    Settings.System.DOZE_PULSE_DURATION_VISIBLE, dozePulseVisibleDefault(activity));
             mDozePulseVisible.setValue(String.valueOf(statusDozePulseVisible));
             int index = mDozePulseVisible.findIndexOfValue(String.valueOf(statusDozePulseVisible));
             if (index != -1) {
                 mDozePulseVisible.setSummary(mDozePulseVisible.getEntries()[index]);
-            }
-        }
-        if (mDozePulseOut != null) {
-            final int statusDozePulseOut = Settings.System.getInt(getContentResolver(),
-                    Settings.System.DOZE_PULSE_DURATION_OUT, 1000);
-            mDozePulseOut.setValue(String.valueOf(statusDozePulseOut));
-            int index = mDozePulseOut.findIndexOfValue(String.valueOf(statusDozePulseOut));
-            if (index != -1) {
-               mDozePulseOut.setSummary(mDozePulseOut.getEntries()[index]);
             }
         }
         if (mDozeShakeThreshold != null) {
@@ -403,13 +385,15 @@ public class AmbientSettings extends SettingsPreferenceFragment implements
             int value = Settings.Secure.getInt(getContentResolver(), Settings.Secure.DOZE_ENABLED, 1);
             mDozePreference.setChecked(value != 0);
         }
+        if (mDozeSchedule != null) {
+            int value = Settings.System.getInt(getContentResolver(),
+                    Settings.System.DOZE_SCHEDULE, 1);
+            mDozeSchedule.setChecked(value != 0);
+        }
     }
 
     @Override
     public boolean onPreferenceTreeClick(PreferenceScreen preferenceScreen, Preference preference) {
-        if (preference == findPreference(KEY_DOZE_OVERWRITE_VALUE)) {
-            updateDozeListMode();
-        }
         return super.onPreferenceTreeClick(preferenceScreen, preference);
     }
 
@@ -420,26 +404,12 @@ public class AmbientSettings extends SettingsPreferenceFragment implements
             boolean value = (Boolean) objValue;
             Settings.Secure.putInt(getContentResolver(), Settings.Secure.DOZE_ENABLED, value ? 1 : 0);
         }
-        if (preference == mDozePulseIn) {
-            int dozePulseIn = Integer.parseInt((String)objValue);
-            int index = mDozePulseIn.findIndexOfValue((String) objValue);
-            mDozePulseIn.setSummary(mDozePulseIn.getEntries()[index]);
-            Settings.System.putInt(getContentResolver(),
-                    Settings.System.DOZE_PULSE_DURATION_IN, dozePulseIn);
-        }
         if (preference == mDozePulseVisible) {
             int dozePulseVisible = Integer.parseInt((String)objValue);
             int index = mDozePulseVisible.findIndexOfValue((String) objValue);
             mDozePulseVisible.setSummary(mDozePulseVisible.getEntries()[index]);
             Settings.System.putInt(getContentResolver(),
                     Settings.System.DOZE_PULSE_DURATION_VISIBLE, dozePulseVisible);
-        }
-        if (preference == mDozePulseOut) {
-            int dozePulseOut = Integer.parseInt((String)objValue);
-            int index = mDozePulseOut.findIndexOfValue((String) objValue);
-            mDozePulseOut.setSummary(mDozePulseOut.getEntries()[index]);
-            Settings.System.putInt(getContentResolver(),
-                    Settings.System.DOZE_PULSE_DURATION_OUT, dozePulseOut);
         }
         if (preference == mDozeShakeThreshold) {
             int accValue = Integer.parseInt((String)objValue);
@@ -460,12 +430,46 @@ public class AmbientSettings extends SettingsPreferenceFragment implements
             Settings.System.putInt(getActivity().getContentResolver(),
                     Settings.System.DOZE_BRIGHTNESS, dozeBrightness);
         }
+        if (preference == mDozeSchedule) {
+            boolean value = (Boolean) objValue;
+            Settings.System.putInt(getContentResolver(),
+                    Settings.System.DOZE_SCHEDULE, value ? 1 : 0);
+        }
         return true;
     }
 
     @Override
     public boolean onPreferenceClick(Preference preference) {
         return false;
+    }
+
+    // Get de default config form SyatemUi
+    private static int dozePulseVisibleDefault(Context context) {
+        return getConfigInteger(context, "doze_pulse_duration_visible");
+    }
+
+    private static Integer getConfigInteger(Context context, String configIntegerName) {
+        int resId = -1;
+        Integer i = 1;
+        PackageManager pm = context.getPackageManager();
+        if (pm == null) {
+            return null;
+        }
+
+        Resources systemUiResources;
+        try {
+            systemUiResources = pm.getResourcesForApplication(SYSTEMUI_METADATA_NAME);
+        } catch (Exception e) {
+            Log.e("DozeSettings:", "can't access systemui resources",e);
+            return null;
+        }
+
+        resId = systemUiResources.getIdentifier(
+            SYSTEMUI_METADATA_NAME + ":integer/" + configIntegerName, null, null);
+        if (resId > 0) {
+            i = systemUiResources.getInteger(resId);
+        }
+        return i;
     }
 
     public static final Indexable.SearchIndexProvider SEARCH_INDEX_DATA_PROVIDER =
@@ -486,12 +490,22 @@ public class AmbientSettings extends SettingsPreferenceFragment implements
                 @Override
                 public List<String> getNonIndexableKeys(Context context) {
                     ArrayList<String> result = new ArrayList<String>();
-                    if (!isAccelerometerAvailable(context)) {
+                    if (!isDozeAvailable(context)) {
+                        result.add(KEY_DOZE);
                         result.add(KEY_DOZE_LIST_MODE);
-                        result.add(KEY_DOZE_SHAKE_THRESHOLD);
-                    }
-                    if (isAccelerometerAvailable(context)) {
+                        result.add(KEY_DOZE_TIME_MODE);
                         result.add(KEY_DOZE_PULSE_MODE);
+                        result.add(KEY_DOZE_PULSE_VISIBLE);
+                        result.add(KEY_DOZE_SHAKE_THRESHOLD);
+                        result.add(KEY_DOZE_SCHEDULE);
+                    } else {
+                       if (!isAccelerometerAvailable(context)) {
+                           result.add(KEY_DOZE_LIST_MODE);
+                           result.add(KEY_DOZE_SHAKE_THRESHOLD);
+                       }
+                       if (isAccelerometerAvailable(context)) {
+                           result.add(KEY_DOZE_PULSE_MODE);
+                       }
                     }
                     return result;
                 }
