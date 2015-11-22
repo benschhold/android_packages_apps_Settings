@@ -188,7 +188,7 @@ public class BlissDisplaySettings extends SettingsPreferenceFragment implements
         try {
             final IActivityManager am = ActivityManagerNative.asInterface(ServiceManager.checkService("activity"));
             if (am != null) {
-                  new CMDProcessor().su.runWaitFor("reboot");
+                 am.restart();
             }
         }
         catch (RemoteException e) {
